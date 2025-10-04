@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data-to-Music Graph Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <header class="app-header">
+            <h1>Data-to-Music Graph Visualizer</h1>
+            <div class="upload-section">
+                <div class="upload-controls">
+                    <input type="file" id="fileInput" accept=".csv,.json" class="form-control file-input">
+                    <label for="fileInput" class="btn btn--secondary upload-btn">
+                        <span>📁 Upload CSV/JSON</span>
+                    </label>
+                    <div class="upload-status" id="uploadStatus"></div>
+                </div>
+                <div class="realtime-input">
+                    <input type="text" id="realtimeInput" placeholder="Enter API endpoint (simulated)" class="form-control">
+                    <button class="btn btn--outline" id="fetchBtn">Fetch Data</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Control Panel -->
+        <section class="control-panel">
+            <div class="playback-controls">
+                <button class="btn btn--primary play-btn" id="playBtn">
+                    <span id="playIcon">▶️</span>
+                    <span id="playText">Play</span>
+                </button>
+                <div class="position-indicator">
+                    <span id="currentPosition">0</span> / <span id="totalLength">0</span>
+                </div>
+            </div>
+            
+            <div class="audio-controls">
+                <div class="control-group">
+                    <label class="form-label">Tempo (BPM)</label>
+                    <input type="range" id="tempoSlider" min="60" max="200" value="120" class="slider">
+                    <span id="tempoValue">120</span>
+                </div>
+                
+                <div class="control-group">
+                    <label class="form-label">Instrument</label>
+                    <select id="instrumentSelect" class="form-control">
+                        <option value="piano">Piano</option>
+                        <option value="synth">Synth Lead</option>
+                        <option value="square">Square Wave</option>
+                        <option value="sawtooth">Sawtooth</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label class="form-label">Musical Scale</label>
+                    <select id="scaleSelect" class="form-control">
+                        <option value="major">Major Scale</option>
+                        <option value="chromatic">Chromatic</option>
+                        <option value="pentatonic">Pentatonic</option>
+                        <option value="minor">Minor Scale</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="zoom-controls">
+                <label class="form-label">Zoom Level</label>
+                <div class="zoom-buttons">
+                    <button class="btn btn--sm btn--outline" id="zoomInBtn">🔍 Zoom In</button>
+                    <button class="btn btn--sm btn--outline" id="zoomOutBtn">🔍 Zoom Out</button>
+                    <button class="btn btn--sm btn--secondary" id="resetZoomBtn">Reset</button>
+                </div>
+                <div class="zoom-info">
+                    <span>Level: <span id="zoomLevel">1x</span></span>
+                    <span>Range: <span id="noteRange">1 octave</span></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Visualization Area -->
+        <section class="visualization-section">
+            <div class="graph-container">
+                <div id="graphTitle" class="graph-title">Select a dataset to begin</div>
+                <div id="visualization" class="visualization-area"></div>
+                <div class="graph-info">
+                    <span>Hover over the graph to see data values and corresponding notes</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Management Panel -->
+        <section class="data-panel">
+            <div class="dataset-info">
+                <h3>Current Dataset</h3>
+                <div id="datasetInfo" class="dataset-details">
+                    <span class="no-data">No dataset loaded</span>
+                </div>
+            </div>
+            
+            <div class="sample-datasets">
+                <h3>Sample Datasets</h3>
+                <div class="dataset-grid">
+                    <button class="btn btn--outline dataset-btn" data-dataset="stockPrices">
+                        📈 Stock Prices
+                    </button>
+                    <button class="btn btn--outline dataset-btn" data-dataset="temperature">
+                        🌡️ Temperature
+                    </button>
+                    <button class="btn btn--outline dataset-btn" data-dataset="sineWave">
+                        〰️ Sine Wave
+                    </button>
+                    <button class="btn btn--outline dataset-btn" data-dataset="randomWalk">
+                        🎲 Random Walk
+                    </button>
+                    <button class="btn btn--outline dataset-btn" data-dataset="heartbeat">
+                        💓 Heartbeat
+                    </button>
+                </div>
+            </div>
+            
+            <div class="data-statistics" id="dataStatistics">
+                <h4>Statistics</h4>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Count:</span>
+                        <span class="stat-value" id="statCount">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Min:</span>
+                        <span class="stat-value" id="statMin">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Max:</span>
+                        <span class="stat-value" id="statMax">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Mean:</span>
+                        <span class="stat-value" id="statMean">-</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <p>Processing data...</p>
+            </div>
+        </div>
+
+        <!-- Error Modal -->
+        <div id="errorModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Error</h3>
+                <p id="errorMessage">An error occurred</p>
+                <button class="btn btn--primary" id="closeErrorBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
