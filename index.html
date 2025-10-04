@@ -21,12 +21,60 @@
                     </label>
                     <div class="upload-status" id="uploadStatus"></div>
                 </div>
-                <div class="realtime-input">
-                    <input type="text" id="realtimeInput" placeholder="Enter API endpoint (simulated)" class="form-control">
-                    <button class="btn btn--outline" id="fetchBtn">Fetch Data</button>
-                </div>
             </div>
         </header>
+
+        <!-- Live Data Sources Panel -->
+        <section class="live-data-panel">
+            <h3>🔴 Live Data Sources</h3>
+            <div class="live-data-grid">
+                <div class="api-config">
+                    <div class="form-group">
+                        <label class="form-label">Stock API Provider</label>
+                        <select id="apiProvider" class="form-control">
+                            <option value="">Select API Provider</option>
+                            <option value="alphaVantage">Alpha Vantage</option>
+                            <option value="iexCloud">IEX Cloud</option>
+                            <option value="polygon">Polygon</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="password" id="apiKey" placeholder="Enter your API key" class="form-control">
+                    </div>
+                </div>
+                <div class="stock-config">
+                    <div class="form-group">
+                        <label class="form-label">Stock Symbol</label>
+                        <input type="text" id="stockSymbol" placeholder="e.g., AAPL, GOOGL, MSFT" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Update Interval</label>
+                        <select id="updateInterval" class="form-control">
+                            <option value="60000">1 minute</option>
+                            <option value="300000" selected>5 minutes</option>
+                            <option value="900000">15 minutes</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="live-controls">
+                    <button class="btn btn--primary" id="connectLiveBtn">
+                        <span id="connectIcon">🔗</span>
+                        <span id="connectText">Connect Live Data</span>
+                    </button>
+                    <button class="btn btn--outline" id="refreshDataBtn">🔄 Manual Refresh</button>
+                    <div class="api-status">
+                        <div class="status-indicator" id="apiStatus">
+                            <span class="status-dot disconnected"></span>
+                            <span class="status-text">Disconnected</span>
+                        </div>
+                        <div class="data-freshness" id="dataFreshness">
+                            Last update: Never
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         <!-- Control Panel -->
         <section class="control-panel">
@@ -37,6 +85,10 @@
                 </button>
                 <div class="position-indicator">
                     <span id="currentPosition">0</span> / <span id="totalLength">0</span>
+                </div>
+                <div class="current-note-display">
+                    <span class="note-label">Current Note:</span>
+                    <span id="currentNote" class="note-value">-</span>
                 </div>
             </div>
             
@@ -88,7 +140,7 @@
                 <div id="graphTitle" class="graph-title">Select a dataset to begin</div>
                 <div id="visualization" class="visualization-area"></div>
                 <div class="graph-info">
-                    <span>Hover over the graph to see data values and corresponding notes</span>
+                    <span>🎵 Watch the orange note tracker circle move along the graph during playback</span>
                 </div>
             </div>
         </section>
