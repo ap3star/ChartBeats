@@ -1,6 +1,6 @@
 // ============================================
 // Data-to-Music Graph Visualizer Application
-// Enhanced with Note Tracking & Live Data Integration
+// Enhanced with Continuous Live Data & Note Tracking
 // ============================================
 
 class DataMusicVisualizer {
@@ -57,15 +57,25 @@ class DataMusicVisualizer {
         this.playbackInterval = null;
         this.synth = null;
 
+        // ENHANCED: Live data state management
+        this.isLiveMode = false;
+        this.liveDataBuffer = [];
+        this.maxBufferSize = 150;
+        this.lastUpdateTime = null;
+        this.liveUpdateInterval = null;
+        this.updateFrequency = 60000; // 1 minute default
+        this.continuousLiveUpdates = null;
+
         // Live data integration
         this.liveDataConfig = {
             apiProvider: null,
             apiKey: null,
             stockSymbol: null,
-            updateInterval: 300000, // 5 minutes default
+            updateInterval: 60000, // 1 minute default
             isConnected: false,
             lastUpdate: null,
-            refreshInterval: null
+            refreshInterval: null,
+            basePrice: 100 // For simulation
         };
 
         // Settings
@@ -117,7 +127,7 @@ class DataMusicVisualizer {
         
         document.getElementById('scaleSelect').addEventListener('change', (e) => {
             this.settings.scale = e.target.value;
-            this.updateVisualization(); // Refresh to show new note ranges
+            this.updateVisualization();
         });
 
         // Zoom controls
@@ -139,70 +149,148 @@ class DataMusicVisualizer {
         // Live data controls
         document.getElementById('connectLiveBtn').addEventListener('click', () => this.toggleLiveDataConnection());
         document.getElementById('refreshDataBtn').addEventListener('click', () => this.manualRefreshLiveData());
+        document.getElementById('liveModeBtn').addEventListener('click', () => this.toggleLiveMode());
 
         // Error modal
         document.getElementById('closeErrorBtn').addEventListener('click', () => this.hideError());
     }
 
     // ============================================
-    // LIVE STOCK API INTEGRATION SECTION
+    // ENHANCED LIVE DATA WITH CONTINUOUS UPDATES
     // ============================================
-    // Replace this section with your preferred stock API
 
-    // TODO: Add your API key here
-    // const STOCK_API_KEY = "YOUR_API_KEY_HERE";
+    setLiveDataMode(enabled) {
+        this.isLiveMode = enabled;
+        const liveModeBtn = document.getElementById('liveModeBtn');
+        const liveModeText = document.getElementById('liveModeText');
+        const liveIndicator = liveModeBtn.querySelector('.live-indicator');
+        const visualizationSection = document.querySelector('.visualization-section');
+        const visualizationArea = document.querySelector('.visualization-area');
+        const graphTitle = document.getElementById('graphTitle');
+        const liveGraphInfo = document.getElementById('liveGraphInfo');
+        const liveStatusDisplay = document.getElementById('liveStatusDisplay');
 
-    // TODO: Configure your preferred stock API endpoint
-    // Popular options:
-    // - Alpha Vantage: https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${apiKey}
-    // - IEX Cloud: https://cloud.iexapis.com/stable/stock/${symbol}/intraday-prices?token=${token}
-    // - Polygon: https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/minute/${date}/${date}?apikey=${apiKey}
+        if (enabled) {
+            liveModeText.textContent = 'Live Mode: ON';
+            liveIndicator.classList.add('active');
+            liveModeBtn.classList.add('btn--success');
+            visualizationSection.classList.add('live-mode');
+            visualizationArea.classList.add('live-mode');
+            graphTitle.classList.add('live');
+            liveGraphInfo.style.display = 'block';
+            liveStatusDisplay.style.display = 'block';
+            this.startContinuousUpdates();
+            this.enableContinuousPlayback();
+            // Disable sample dataset buttons in live mode
+            document.querySelectorAll('.dataset-btn').forEach(btn => btn.disabled = true);
+        } else {
+            liveModeText.textContent = 'Live Mode: OFF';
+            liveIndicator.classList.remove('active');
+            liveModeBtn.classList.remove('btn--success');
+            visualizationSection.classList.remove('live-mode');
+            visualizationArea.classList.remove('live-mode');
+            graphTitle.classList.remove('live');
+            liveGraphInfo.style.display = 'none';
+            liveStatusDisplay.style.display = 'none';
+            this.stopContinuousUpdates();
+            this.disableContinuousPlayback();
+            // Re-enable sample dataset buttons
+            document.querySelectorAll('.dataset-btn').forEach(btn => btn.disabled = false);
+        }
+
+        this.updateLiveVisualizationStyles();
+    }
+
+    toggleLiveMode() {
+        if (!this.liveDataConfig.isConnected) {
+            this.showError('Please connect to live data first');
+            return;
+        }
+        this.setLiveDataMode(!this.isLiveMode);
+    }
+
+    async startContinuousUpdates() {
+        if (!this.isLiveMode || !this.liveDataConfig.isConnected) return;
+
+        const updateLoop = async () => {
+            try {
+                if (!this.isLiveMode || !this.liveDataConfig.isConnected) return;
+
+                const newDataPoint = await this.fetchLatestDataPoint();
+                this.addToLiveBuffer(newDataPoint);
+                this.updateGraphWithNewData();
+                this.updateAudioPlayback();
+                
+                // Schedule next update
+                this.continuousLiveUpdates = setTimeout(updateLoop, this.updateFrequency);
+            } catch (error) {
+                console.error('Continuous update failed:', error);
+                // Continue trying in case of temporary errors
+                this.continuousLiveUpdates = setTimeout(updateLoop, this.updateFrequency);
+            }
+        };
+
+        // Start the loop
+        updateLoop();
+    }
+
+    stopContinuousUpdates() {
+        if (this.continuousLiveUpdates) {
+            clearTimeout(this.continuousLiveUpdates);
+            this.continuousLiveUpdates = null;
+        }
+    }
+
+    async fetchLatestDataPoint() {
+        // Simulate fetching a single new data point
+        const variation = (Math.random() - 0.5) * this.liveDataConfig.basePrice * 0.02;
+        this.liveDataConfig.basePrice = Math.max(1, this.liveDataConfig.basePrice + variation);
+        return this.liveDataConfig.basePrice;
+    }
+
+    addToLiveBuffer(newDataPoint) {
+        this.liveDataBuffer.push(newDataPoint);
+        if (this.liveDataBuffer.length > this.maxBufferSize) {
+            this.liveDataBuffer.shift(); // Remove oldest
+        }
+        
+        // Update buffer size display
+        document.getElementById('bufferSize').textContent = this.liveDataBuffer.length;
+    }
+
+    updateGraphWithNewData() {
+        if (!this.isLiveMode) return;
+        
+        // Update current data with the live buffer
+        this.currentData = [...this.liveDataBuffer];
+        
+        // Smooth visualization update without interrupting playback
+        this.updateVisualization();
+        this.updateDataStatistics();
+        this.updateDataFreshness();
+    }
+
+    updateAudioPlayback() {
+        if (!this.isLiveMode || !this.isPlaying) return;
+        
+        // In live mode, keep playback position near the end of available data
+        const bufferPosition = this.liveDataBuffer.length - 5; // Play 5 points behind the newest
+        if (bufferPosition > 0 && this.currentPosition < bufferPosition) {
+            this.currentPosition = Math.max(0, bufferPosition);
+        }
+    }
+
+    enableContinuousPlayback() {
+        // Mark that we're in continuous playback mode
+        // The main playback loop will handle never stopping
+    }
+
+    disableContinuousPlayback() {
+        // Return to normal playback behavior
+    }
 
     async fetchLiveStockData(symbol, apiKey, provider) {
-        // TODO: Implement your API call here
-        // Example structure:
-        /*
-        try {
-            let url;
-            switch(provider) {
-                case 'alphaVantage':
-                    url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${apiKey}`;
-                    break;
-                case 'iexCloud':
-                    url = `https://cloud.iexapis.com/stable/stock/${symbol}/intraday-prices?token=${apiKey}`;
-                    break;
-                case 'polygon':
-                    const today = new Date().toISOString().split('T')[0];
-                    url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/minute/${today}/${today}?apikey=${apiKey}`;
-                    break;
-                default:
-                    throw new Error('Unsupported API provider');
-            }
-            
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            // TODO: Transform API response to our data format
-            // Expected format: array of numbers [price1, price2, price3...]
-            const transformedData = this.transformApiData(data, provider);
-            
-            return {
-                name: `${symbol} Live Data`,
-                description: `Real-time ${symbol} stock prices`,
-                data: transformedData,
-                timestamp: new Date()
-            };
-        } catch (error) {
-            console.error('Stock API Error:', error);
-            throw error;
-        }
-        */
-
-        // SIMULATION: For demonstration purposes, return simulated live data
+        // Simulated live stock data for demonstration
         return new Promise((resolve) => {
             setTimeout(() => {
                 const simulatedData = this.generateSimulatedLiveData(symbol);
@@ -216,44 +304,18 @@ class DataMusicVisualizer {
         });
     }
 
-    // TODO: Add your data transformation logic
-    transformApiData(apiResponse, provider) {
-        // Convert your API's response format to simple number array
-        // Return: [number, number, number...]
-        
-        /*
-        switch(provider) {
-            case 'alphaVantage':
-                const timeSeries = apiResponse['Time Series (1min)'];
-                return Object.values(timeSeries)
-                    .map(entry => parseFloat(entry['4. close']))
-                    .reverse(); // Most recent first
-                    
-            case 'iexCloud':
-                return apiResponse.map(entry => entry.close);
-                
-            case 'polygon':
-                return apiResponse.results.map(entry => entry.c); // close price
-                
-            default:
-                throw new Error('Unknown API provider for data transformation');
-        }
-        */
-    }
-
     generateSimulatedLiveData(symbol) {
-        // Generate realistic stock-like data for simulation
         const basePrice = 100 + Math.random() * 200;
+        this.liveDataConfig.basePrice = basePrice; // Store for continuous updates
         const dataPoints = 60; // 1 hour of minute data
         const data = [];
         let currentPrice = basePrice;
         
         for (let i = 0; i < dataPoints; i++) {
-            // Add some realistic price movement
-            const change = (Math.random() - 0.5) * 2; // -1 to +1
-            const trend = Math.sin(i / 10) * 0.5; // Slight trending
+            const change = (Math.random() - 0.5) * 2;
+            const trend = Math.sin(i / 10) * 0.5;
             currentPrice += change + trend;
-            currentPrice = Math.max(0.01, currentPrice); // Prevent negative prices
+            currentPrice = Math.max(0.01, currentPrice);
             data.push(currentPrice);
         }
         
@@ -264,10 +326,8 @@ class DataMusicVisualizer {
         const connectBtn = document.getElementById('connectLiveBtn');
         const connectIcon = document.getElementById('connectIcon');
         const connectText = document.getElementById('connectText');
-        const apiStatus = document.getElementById('apiStatus');
 
         if (!this.liveDataConfig.isConnected) {
-            // Attempt to connect
             const provider = document.getElementById('apiProvider').value;
             const apiKey = document.getElementById('apiKey').value;
             const symbol = document.getElementById('stockSymbol').value.toUpperCase();
@@ -277,20 +337,15 @@ class DataMusicVisualizer {
                 return;
             }
 
-            // Note: API key validation would be done in real implementation
-            if (!apiKey && provider !== '') {
-                console.warn('No API key provided - using simulation mode');
-            }
-
             try {
                 this.updateApiStatus('connecting', 'Connecting...');
                 connectBtn.disabled = true;
 
-                // Fetch initial data
                 const result = await this.fetchLiveStockData(symbol, apiKey, provider);
                 
-                // Update application state
-                this.currentData = result.data;
+                // Initialize live buffer with fetched data
+                this.liveDataBuffer = [...result.data];
+                this.currentData = [...result.data];
                 this.currentDataset = {
                     name: result.name,
                     description: result.description,
@@ -302,24 +357,24 @@ class DataMusicVisualizer {
                 this.liveDataConfig.apiKey = apiKey;
                 this.liveDataConfig.stockSymbol = symbol;
                 this.liveDataConfig.lastUpdate = result.timestamp;
+                this.updateFrequency = parseInt(document.getElementById('updateInterval').value);
 
-                // Update UI
                 this.updateVisualization();
                 this.updateDatasetInfo();
                 this.updateDataStatistics();
                 this.resetPlayback();
 
-                // Clear active sample dataset buttons
                 document.querySelectorAll('.dataset-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('liveModeBtn').disabled = false;
 
-                // Start auto-refresh
                 this.startLiveDataRefresh();
-
-                // Update button state
                 connectIcon.textContent = '🔌';
                 connectText.textContent = 'Disconnect';
                 this.updateApiStatus('connected', 'Connected');
                 this.updateDataFreshness();
+
+                // Automatically enable live mode
+                this.setLiveDataMode(true);
 
             } catch (error) {
                 this.updateApiStatus('error', 'Connection Failed');
@@ -330,18 +385,26 @@ class DataMusicVisualizer {
 
         } else {
             // Disconnect
+            this.setLiveDataMode(false);
             this.stopLiveDataRefresh();
             this.liveDataConfig.isConnected = false;
+            this.liveDataBuffer = [];
             connectIcon.textContent = '🔗';
             connectText.textContent = 'Connect Live Data';
             this.updateApiStatus('disconnected', 'Disconnected');
+            document.getElementById('liveModeBtn').disabled = true;
         }
     }
 
     startLiveDataRefresh() {
         const interval = parseInt(document.getElementById('updateInterval').value);
+        this.updateFrequency = interval;
+        
         this.liveDataConfig.refreshInterval = setInterval(() => {
-            this.refreshLiveData();
+            if (!this.isLiveMode) {
+                this.refreshLiveData();
+            }
+            // If in live mode, continuous updates handle the refresh
         }, interval);
     }
 
@@ -350,33 +413,39 @@ class DataMusicVisualizer {
             clearInterval(this.liveDataConfig.refreshInterval);
             this.liveDataConfig.refreshInterval = null;
         }
+        this.stopContinuousUpdates();
     }
 
     async refreshLiveData() {
         if (!this.liveDataConfig.isConnected) return;
 
         try {
-            const result = await this.fetchLiveStockData(
-                this.liveDataConfig.stockSymbol,
-                this.liveDataConfig.apiKey,
-                this.liveDataConfig.apiProvider
-            );
+            if (this.isLiveMode) {
+                // In live mode, just add a new data point
+                const newPoint = await this.fetchLatestDataPoint();
+                this.addToLiveBuffer(newPoint);
+                this.updateGraphWithNewData();
+            } else {
+                // In normal mode, refresh entire dataset
+                const result = await this.fetchLiveStockData(
+                    this.liveDataConfig.stockSymbol,
+                    this.liveDataConfig.apiKey,
+                    this.liveDataConfig.apiProvider
+                );
 
-            // Smooth data transition - don't interrupt playback
-            const wasPlaying = this.isPlaying;
-            if (wasPlaying) {
-                this.stopPlayback();
-            }
+                const wasPlaying = this.isPlaying;
+                if (wasPlaying) this.stopPlayback();
 
-            this.currentData = result.data;
-            this.liveDataConfig.lastUpdate = result.timestamp;
-            
-            this.updateVisualization();
-            this.updateDataStatistics();
-            this.updateDataFreshness();
+                this.currentData = result.data;
+                this.liveDataConfig.lastUpdate = result.timestamp;
+                
+                this.updateVisualization();
+                this.updateDataStatistics();
+                this.updateDataFreshness();
 
-            if (wasPlaying) {
-                setTimeout(() => this.startPlayback(), 100);
+                if (wasPlaying) {
+                    setTimeout(() => this.startPlayback(), 100);
+                }
             }
 
         } catch (error) {
@@ -447,7 +516,7 @@ class DataMusicVisualizer {
     }
 
     // ============================================
-    // D3 VISUALIZATION WITH NOTE TRACKING
+    // D3 VISUALIZATION WITH LIVE DATA SUPPORT
     // ============================================
 
     setupD3Visualization() {
@@ -466,11 +535,9 @@ class DataMusicVisualizer {
         this.chartGroup = this.svg.append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
 
-        // Create scales
         this.xScale = d3.scaleLinear().range([0, width]);
         this.yScale = d3.scaleLinear().range([height, 0]);
 
-        // Create axes
         this.xAxis = this.chartGroup.append('g')
             .attr('class', 'axis')
             .attr('transform', `translate(0,${height})`);
@@ -478,62 +545,54 @@ class DataMusicVisualizer {
         this.yAxis = this.chartGroup.append('g')
             .attr('class', 'axis');
 
-        // Create line generator
         this.line = d3.line()
             .x((d, i) => this.xScale(i))
             .y(d => this.yScale(d))
             .curve(d3.curveMonotoneX);
 
-        // Create path for the line
         this.path = this.chartGroup.append('path')
             .attr('class', 'graph-line');
 
-        // Create note range lines
         this.noteRangeGroup = this.chartGroup.append('g').attr('class', 'note-ranges');
 
-        // Create playhead line
         this.playheadLine = this.chartGroup.append('line')
             .attr('class', 'playhead-line')
             .attr('y1', 0)
             .attr('y2', height)
             .style('display', 'none');
 
-        // Create note tracker circle (FIXED: Ensure it's visible and properly styled)
         this.noteTracker = this.chartGroup.append('circle')
             .attr('class', 'note-tracker')
             .attr('r', 10)
-            .style('fill', '#ff6b35')
-            .style('stroke', '#ff8c42')
-            .style('stroke-width', '3px')
-            .style('opacity', '0.9')
             .style('display', 'none');
 
-        // Create note tracker text
         this.noteTrackerText = this.chartGroup.append('text')
             .attr('class', 'note-tracker-text')
             .attr('dy', -15)
-            .style('font-family', 'monospace')
-            .style('font-size', '14px')
-            .style('font-weight', 'bold')
-            .style('fill', '#333')
-            .style('text-anchor', 'middle')
-            .style('pointer-events', 'none')
             .style('display', 'none');
 
-        // Create tooltip
         this.tooltip = d3.select('body').append('div')
             .attr('class', 'tooltip');
 
-        // Add grid lines
-        this.xGrid = this.chartGroup.append('g')
-            .attr('class', 'grid');
+        this.xGrid = this.chartGroup.append('g').attr('class', 'grid');
+        this.yGrid = this.chartGroup.append('g').attr('class', 'grid');
 
-        this.yGrid = this.chartGroup.append('g')
-            .attr('class', 'grid');
-
-        // Store dimensions for later use
         this.chartWidth = width;
         this.chartHeight = height;
+    }
+
+    updateLiveVisualizationStyles() {
+        if (!this.path) return;
+
+        if (this.isLiveMode) {
+            this.path.classed('live-data', true);
+            this.playheadLine.classed('live-mode', true);
+            this.noteTracker.classed('live-mode', true);
+        } else {
+            this.path.classed('live-data', false);
+            this.playheadLine.classed('live-mode', false);
+            this.noteTracker.classed('live-mode', false);
+        }
     }
 
     normalizeData(data) {
@@ -550,13 +609,18 @@ class DataMusicVisualizer {
         const dataset = this.sampleDatasets[key];
         if (!dataset) return;
 
-        // Stop live data if connected
+        // Disable live mode when loading static data
+        if (this.isLiveMode) {
+            this.setLiveDataMode(false);
+        }
+
         if (this.liveDataConfig.isConnected) {
             this.stopLiveDataRefresh();
             this.liveDataConfig.isConnected = false;
             document.getElementById('connectIcon').textContent = '🔗';
             document.getElementById('connectText').textContent = 'Connect Live Data';
             this.updateApiStatus('disconnected', 'Disconnected');
+            document.getElementById('liveModeBtn').disabled = true;
         }
 
         this.showLoading();
@@ -574,7 +638,6 @@ class DataMusicVisualizer {
             this.updateDataStatistics();
             this.resetPlayback();
             
-            // Update active button
             document.querySelectorAll('.dataset-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelector(`[data-dataset="${key}"]`).classList.add('active');
             
@@ -586,13 +649,18 @@ class DataMusicVisualizer {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Stop live data if connected
+        // Disable live mode when loading file data
+        if (this.isLiveMode) {
+            this.setLiveDataMode(false);
+        }
+
         if (this.liveDataConfig.isConnected) {
             this.stopLiveDataRefresh();
             this.liveDataConfig.isConnected = false;
             document.getElementById('connectIcon').textContent = '🔗';
             document.getElementById('connectText').textContent = 'Connect Live Data';
             this.updateApiStatus('disconnected', 'Disconnected');
+            document.getElementById('liveModeBtn').disabled = true;
         }
 
         this.showLoading();
@@ -627,7 +695,6 @@ class DataMusicVisualizer {
             statusEl.textContent = 'File loaded successfully!';
             statusEl.className = 'upload-success';
             
-            // Clear active sample dataset buttons
             document.querySelectorAll('.dataset-btn').forEach(btn => btn.classList.remove('active'));
 
         } catch (error) {
@@ -658,7 +725,6 @@ class DataMusicVisualizer {
                 const num = parseFloat(values[0]);
                 if (!isNaN(num)) data.push(num);
             } else {
-                // Assume the last column contains the values we want
                 const num = parseFloat(values[values.length - 1]);
                 if (!isNaN(num)) data.push(num);
             }
@@ -698,21 +764,15 @@ class DataMusicVisualizer {
         const normalizedData = this.normalizeData(this.currentData);
         const visibleData = this.getZoomedData(normalizedData);
 
-        // Update scales
         this.xScale.domain([0, visibleData.length - 1]);
         this.yScale.domain([0, 1]);
 
-        // Update axes with enhanced note labels
         this.xAxis.call(d3.axisBottom(this.xScale).tickFormat(d => Math.floor(d)));
         this.yAxis.call(d3.axisLeft(this.yScale).tickFormat(d => this.getNoteForValue(d)));
 
-        // Add octave labels when zoomed
         this.addOctaveLabels();
-
-        // Add note range lines
         this.addNoteRangeLines();
 
-        // Update grid
         this.xGrid.call(d3.axisBottom(this.xScale)
             .tickSize(-this.chartHeight)
             .tickFormat('')
@@ -726,12 +786,11 @@ class DataMusicVisualizer {
         this.xGrid.selectAll('line').attr('class', 'grid-line');
         this.yGrid.selectAll('line').attr('class', 'grid-line');
 
-        // Update line path
         this.path
             .datum(visibleData)
             .attr('d', this.line);
 
-        // Add interactive dots
+        // Update dots with fading for older data in live mode
         const dots = this.chartGroup.selectAll('.graph-dot')
             .data(visibleData);
 
@@ -742,17 +801,18 @@ class DataMusicVisualizer {
             .merge(dots)
             .attr('cx', (d, i) => this.xScale(i))
             .attr('cy', d => this.yScale(d))
+            .classed('live-data', this.isLiveMode)
+            .classed('fading', (d, i) => this.isLiveMode && i < visibleData.length * 0.7)
             .on('mouseover', (event, d, i) => this.showTooltip(event, d, i))
             .on('mouseout', () => this.hideTooltip());
 
         dots.exit().remove();
 
-        // Update graph title
+        this.updateLiveVisualizationStyles();
         document.getElementById('graphTitle').textContent = this.currentDataset.name;
     }
 
     addOctaveLabels() {
-        // Remove existing octave labels
         this.chartGroup.selectAll('.octave-label').remove();
 
         if (this.zoomLevel > 1) {
@@ -772,14 +832,12 @@ class DataMusicVisualizer {
     }
 
     addNoteRangeLines() {
-        // Remove existing note range lines
         this.noteRangeGroup.selectAll('.note-range-line').remove();
 
         const scale = this.musicalScales[this.settings.scale];
         const octaveRange = Math.max(1, Math.ceil(this.zoomLevel / 2));
         const totalNotes = scale.intervals.length * octaveRange;
 
-        // Add subtle horizontal lines for each note
         for (let i = 0; i <= totalNotes; i++) {
             const y = this.yScale(i / totalNotes);
             this.noteRangeGroup.append('line')
@@ -794,11 +852,18 @@ class DataMusicVisualizer {
     getZoomedData(data) {
         if (this.zoomLevel === 1) return data;
         
-        const start = Math.floor(this.currentPosition);
-        const windowSize = Math.floor(data.length / this.zoomLevel);
-        const end = Math.min(start + windowSize, data.length);
-        
-        return data.slice(start, end);
+        if (this.isLiveMode) {
+            // In live mode, always show the most recent data
+            const windowSize = Math.floor(data.length / this.zoomLevel);
+            const start = Math.max(0, data.length - windowSize);
+            return data.slice(start);
+        } else {
+            // In static mode, show zoomed data around current position
+            const start = Math.floor(this.currentPosition);
+            const windowSize = Math.floor(data.length / this.zoomLevel);
+            const end = Math.min(start + windowSize, data.length);
+            return data.slice(start, end);
+        }
     }
 
     getNoteForValue(normalizedValue) {
@@ -809,13 +874,16 @@ class DataMusicVisualizer {
     }
 
     showTooltip(event, value, index) {
-        const originalValue = this.currentData[Math.floor(this.currentPosition) + index];
-        const note = this.getNoteForValue(value);
+        const actualIndex = this.isLiveMode && this.zoomLevel > 1 ? 
+            Math.max(0, this.currentData.length - this.getZoomedData(this.normalizeData(this.currentData)).length) + index :
+            Math.floor(this.currentPosition) + index;
+        
+        const originalValue = this.currentData[actualIndex];
         const fullNote = this.valueToNote(value);
         
         this.tooltip
             .html(`
-                <strong>Index:</strong> ${Math.floor(this.currentPosition) + index}<br>
+                <strong>Index:</strong> ${actualIndex}<br>
                 <strong>Value:</strong> ${originalValue?.toFixed(2)}<br>
                 <strong>Note:</strong> ${fullNote}
             `)
@@ -829,7 +897,7 @@ class DataMusicVisualizer {
     }
 
     // ============================================
-    // ENHANCED PLAYBACK WITH NOTE TRACKING
+    // ENHANCED PLAYBACK WITH CONTINUOUS LIVE MODE
     // ============================================
 
     async togglePlayback() {
@@ -854,13 +922,12 @@ class DataMusicVisualizer {
             this.isPlaying = true;
             this.updatePlayButton();
             
-            // Show all playback visual elements
             this.playheadLine.style('display', 'block');
             this.noteTracker.style('display', 'block');
             this.noteTrackerText.style('display', 'block');
 
             const bpm = this.settings.tempo;
-            const intervalMs = (60 / bpm) * 250; // Quarter note timing
+            const intervalMs = (60 / bpm) * 250;
 
             this.playbackInterval = setInterval(() => {
                 this.playCurrentNote();
@@ -868,9 +935,18 @@ class DataMusicVisualizer {
                 this.updatePlayhead();
                 this.currentPosition++;
 
-                if (this.currentPosition >= this.currentData.length) {
-                    this.stopPlayback();
-                    this.resetPlayback();
+                // ENHANCED: Continuous playback for live mode
+                if (this.isLiveMode) {
+                    // In live mode, never stop - loop back to keep playing
+                    if (this.currentPosition >= this.currentData.length) {
+                        this.currentPosition = Math.max(0, this.currentData.length - 10);
+                    }
+                } else {
+                    // Static mode: stop at end
+                    if (this.currentPosition >= this.currentData.length) {
+                        this.stopPlayback();
+                        this.resetPlayback();
+                    }
                 }
             }, intervalMs);
 
@@ -885,12 +961,10 @@ class DataMusicVisualizer {
         this.isPlaying = false;
         this.updatePlayButton();
         
-        // Hide all playback visual elements
         this.playheadLine.style('display', 'none');
         this.noteTracker.style('display', 'none');
         this.noteTrackerText.style('display', 'none');
         
-        // Clear current note display
         document.getElementById('currentNote').textContent = '-';
         
         if (this.playbackInterval) {
@@ -915,8 +989,6 @@ class DataMusicVisualizer {
 
         try {
             this.synth.triggerAttackRelease(note, this.settings.noteLength);
-            
-            // Update current note display
             document.getElementById('currentNote').textContent = note;
         } catch (error) {
             console.error('Note play failed:', error);
@@ -929,24 +1001,30 @@ class DataMusicVisualizer {
         const normalizedData = this.normalizeData(this.currentData);
         const visibleData = this.getZoomedData(normalizedData);
         
-        // Calculate position within the current view
-        const globalPosition = this.currentPosition;
-        const zoomedStart = this.zoomLevel === 1 ? 0 : Math.floor(globalPosition);
-        const relativePosition = this.zoomLevel === 1 ? globalPosition : Math.max(0, globalPosition - zoomedStart);
+        let relativePosition;
         
-        if (relativePosition < visibleData.length && globalPosition < normalizedData.length) {
+        if (this.isLiveMode && this.zoomLevel > 1) {
+            // In live mode with zoom, track relative to the visible window
+            const windowStart = Math.max(0, this.currentData.length - visibleData.length);
+            relativePosition = this.currentPosition - windowStart;
+        } else if (this.zoomLevel === 1) {
+            relativePosition = this.currentPosition;
+        } else {
+            const zoomedStart = Math.floor(this.currentPosition);
+            relativePosition = Math.max(0, this.currentPosition - zoomedStart);
+        }
+        
+        if (relativePosition >= 0 && relativePosition < visibleData.length && this.currentPosition < normalizedData.length) {
             const x = this.xScale(relativePosition);
             const y = this.yScale(visibleData[Math.floor(relativePosition)]);
-            const currentNote = this.valueToNote(normalizedData[globalPosition]);
+            const currentNote = this.valueToNote(normalizedData[this.currentPosition]);
             
-            // Update note tracker circle position with smooth animation
             this.noteTracker
                 .transition()
                 .duration(50)
                 .attr('cx', x)
                 .attr('cy', y);
             
-            // Update note tracker text
             this.noteTrackerText
                 .transition()
                 .duration(50)
@@ -979,22 +1057,35 @@ class DataMusicVisualizer {
             playIcon.textContent = '⏸️';
             playText.textContent = 'Pause';
             playBtn.classList.add('playing');
+            if (this.isLiveMode) {
+                playBtn.classList.add('live-playing');
+            }
         } else {
             playIcon.textContent = '▶️';
             playText.textContent = 'Play';
-            playBtn.classList.remove('playing');
+            playBtn.classList.remove('playing', 'live-playing');
         }
     }
 
     updatePlayhead() {
         if (!this.currentData || this.currentData.length === 0) return;
 
-        const globalPosition = this.currentPosition;
-        const zoomedStart = this.zoomLevel === 1 ? 0 : Math.floor(globalPosition);
-        const relativePosition = this.zoomLevel === 1 ? globalPosition : Math.max(0, globalPosition - zoomedStart);
+        const normalizedData = this.normalizeData(this.currentData);
+        const visibleData = this.getZoomedData(normalizedData);
+        
+        let relativePosition;
+        
+        if (this.isLiveMode && this.zoomLevel > 1) {
+            const windowStart = Math.max(0, this.currentData.length - visibleData.length);
+            relativePosition = this.currentPosition - windowStart;
+        } else if (this.zoomLevel === 1) {
+            relativePosition = this.currentPosition;
+        } else {
+            const zoomedStart = Math.floor(this.currentPosition);
+            relativePosition = Math.max(0, this.currentPosition - zoomedStart);
+        }
         
         const x = this.xScale(relativePosition);
-        
         this.playheadLine.attr('x1', x).attr('x2', x);
         this.updatePositionIndicator();
     }
@@ -1052,10 +1143,12 @@ class DataMusicVisualizer {
     updateDatasetInfo() {
         const infoEl = document.getElementById('datasetInfo');
         if (this.currentDataset) {
+            const sourceText = this.isLiveMode ? 'live (continuous)' : this.currentDataset.source;
             infoEl.innerHTML = `
                 <div><strong>Name:</strong> ${this.currentDataset.name}</div>
                 <div><strong>Description:</strong> ${this.currentDataset.description}</div>
-                <div><strong>Source:</strong> ${this.currentDataset.source}</div>
+                <div><strong>Source:</strong> ${sourceText}</div>
+                ${this.isLiveMode ? `<div><strong>Buffer Size:</strong> ${this.liveDataBuffer.length} points</div>` : ''}
             `;
         } else {
             infoEl.innerHTML = '<span class="no-data">No dataset loaded</span>';
@@ -1089,6 +1182,7 @@ class DataMusicVisualizer {
         this.updateDataStatistics();
         this.updateApiStatus('disconnected', 'Disconnected');
         this.updateDataFreshness();
+        document.getElementById('liveModeBtn').disabled = true;
     }
 
     // ============================================

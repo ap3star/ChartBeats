@@ -51,8 +51,9 @@
                     <div class="form-group">
                         <label class="form-label">Update Interval</label>
                         <select id="updateInterval" class="form-control">
-                            <option value="60000">1 minute</option>
-                            <option value="300000" selected>5 minutes</option>
+                            <option value="30000">30 seconds</option>
+                            <option value="60000" selected>1 minute</option>
+                            <option value="300000">5 minutes</option>
                             <option value="900000">15 minutes</option>
                         </select>
                     </div>
@@ -63,6 +64,12 @@
                         <span id="connectText">Connect Live Data</span>
                     </button>
                     <button class="btn btn--outline" id="refreshDataBtn">🔄 Manual Refresh</button>
+                    <div class="live-mode-toggle">
+                        <button class="btn btn--secondary" id="liveModeBtn" disabled>
+                            <span class="live-indicator"></span>
+                            <span id="liveModeText">Live Mode: OFF</span>
+                        </button>
+                    </div>
                     <div class="api-status">
                         <div class="status-indicator" id="apiStatus">
                             <span class="status-dot disconnected"></span>
@@ -89,6 +96,15 @@
                 <div class="current-note-display">
                     <span class="note-label">Current Note:</span>
                     <span id="currentNote" class="note-value">-</span>
+                </div>
+                <div class="live-status-display" id="liveStatusDisplay" style="display: none;">
+                    <div class="live-badge">
+                        <span class="live-pulse"></span>
+                        LIVE
+                    </div>
+                    <div class="buffer-info">
+                        Buffer: <span id="bufferSize">0</span> points
+                    </div>
                 </div>
             </div>
             
@@ -141,6 +157,7 @@
                 <div id="visualization" class="visualization-area"></div>
                 <div class="graph-info">
                     <span>🎵 Watch the orange note tracker circle move along the graph during playback</span>
+                    <span id="liveGraphInfo" style="display: none;">📡 Live Mode: Graph auto-scrolls to show newest data</span>
                 </div>
             </div>
         </section>
